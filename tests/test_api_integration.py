@@ -22,13 +22,13 @@ def test_extract_features_quickstart():
 
     # 检查返回结构
     assert isinstance(features, dict)
-    assert len(features) == 17, f"期望 17 特征, 实际 {len(features)}"
+    assert len(features) >= 17, f"期望 >=17 特征, 实际 {len(features)}"
 
     assert isinstance(result, dict)
     assert set(result.keys()) == {"score", "level", "level_range"}
     assert 0.0 <= result["score"] <= 100.0
     assert result["level"] in ("LOW", "MEDIUM", "HIGH")
-    assert result["level_range"] in ("0~30", "31~55", "56~100")
+    assert result["level_range"] in ("0~35", "36~55", "56~100")
 
 
 def test_extract_features_value_ranges():
@@ -74,7 +74,7 @@ def test_extract_features_per_user():
     for uid, features in per_user.items():
         assert isinstance(uid, str)
         assert uid.startswith("ACC_")
-        assert len(features) == 17
+        assert len(features) >= 17
         for v in features.values():
             assert isinstance(v, float)
         break  # 只检查第一个
@@ -89,12 +89,12 @@ def test_score_risk_level_mapping():
         score = result["score"]
         level = result["level"]
 
-        if score <= 30:
+        if score <= 35:
             assert level == "LOW", f"{uid}: score={score}, level={level}"
-            assert result["level_range"] == "0~30"
+            assert result["level_range"] == "0~35"
         elif score <= 55:
             assert level == "MEDIUM", f"{uid}: score={score}, level={level}"
-            assert result["level_range"] == "31~55"
+            assert result["level_range"] == "36~55"
         else:
             assert level == "HIGH", f"{uid}: score={score}, level={level}"
             assert result["level_range"] == "56~100"

@@ -217,6 +217,16 @@ def _extract_features_per_user_from_df(
         amt_base = _calc_amount_baseline_per_user(df, user, global_median, global_mad)
         cyclic = _calc_cyclic_time_features_per_user(df, user)
 
+        # interaction features (v1.3.0)
+        inter = {
+            "device_ip_risk":   device_reuse * ip_change,
+            "night_automation": cyclic["night_tx_ratio"] * interv["tx_burst_ratio"],
+            "velocity_amount":  vel["tx_velocity_5min"] * amt_a,
+            "burst_max_ratio":  interv["tx_burst_ratio"] * amt_base["amount_user_max_ratio"],
+            "velocity_ratio":   vel["tx_velocity_1h"] / max(vel["tx_velocity_5min"], 0.01),
+            "amount_exposure":  amt_a * tx_f / max(total_users, 1),
+        }
+
         result[user] = {
             "device_reuse_ratio":    device_reuse,
             "ip_change_freq":        ip_change,
@@ -235,135 +245,24 @@ def _extract_features_per_user_from_df(
             "amount_user_max_ratio": amt_base["amount_user_max_ratio"],
             "night_tx_ratio":        cyclic["night_tx_ratio"],
             "odd_hour_tx_ratio":     cyclic["odd_hour_tx_ratio"],
+            # v1.3.0 — 交互特征
+            "device_ip_risk":        inter["device_ip_risk"],
+            "night_automation":      inter["night_automation"],
+            "velocity_amount":       inter["velocity_amount"],
+            "burst_max_ratio":       inter["burst_max_ratio"],
+            "velocity_ratio":        inter["velocity_ratio"],
+            "amount_exposure":       inter["amount_exposure"],
         }
 
     return result
 
 
 def extract_features_per_user(csv_path: str) -> dict[str, dict[str, float]]:
-    """为每个用户独立计算特征向量。
-
-    Returns:
-        {user_id: {"device_reuse_ratio": ..., ...}}
-    """
+    """为每个用户独立计算特征向量。"""
     df, has_amount = _load_and_validate(csv_path)
     return _extract_features_per_user_from_df(df, has_amount)
 
-    total_users = df["user_id"].nunique()
-    if total_users == 0:
-        raise ValueError("CSV数据中无有效用户")
 
-    all_users = sorted(df["user_id"].unique())
-
-    # ── 1. 构建设备→账户映射（正则提取指纹 + 展开） ──
-    fp_to_accounts: dict[str, set] = {}
-    user_to_fps: dict[str, set] = {}
-    for _, row in df[["user_id", "device_id_raw"]].drop_duplicates().iterrows():
-        uid = row["user_id"]
-        fps = _extract_device_fingerprints(row["device_id_raw"])
-        user_to_fps.setdefault(uid, set()).update(fps)
-        for fp in fps:
-            fp_to_accounts.setdefault(fp, set()).add(uid)
-
-    # ── 2. 预备统计 ────────────────────────────────────────
-    total_ips = df["ip_address"].nunique()
-    user_ip_counts = df.groupby("user_id")["ip_address"].nunique()
-
-    tx_df = df[df["event_type"] == "transaction"]
-    user_tx_counts = tx_df.groupby("user_id").size()
-
-    # login_fail: 从 behavior_type 挖掘
-    has_behavior = "behavior_type" in df.columns
-    if has_behavior:
-        fail_mask = df["behavior_type"].str.contains(
-            "|".join(_LOGIN_FAIL_PATTERNS), case=False, na=False
-        )
-        login_mask = df["event_type"] == "login"
-        login_fail_df = df[login_mask & fail_mask]
-        total_login_df = df[login_mask]
-    else:
-        login_fail_df = df[df["event_type"] == "login_fail"]
-        total_login_df = df[df["event_type"].isin(["login", "login_fail"])]
-
-    login_fail_counts = login_fail_df.groupby("user_id").size()
-    total_login_counts = total_login_df.groupby("user_id").size()
-
-    # amount anomaly: 全局 MAD
-    amount_anomaly_per_user = _calc_amount_anomaly_per_user(df, has_amount, all_users)
-
-    # 全局金额统计（用于 per-user baseline）
-    tx_amounts = df[(df["event_type"] == "transaction") & df.get("amount", pd.Series(dtype=float)).notna() & (df["amount"] > 0)]["amount"].astype(float)
-    global_median = float(tx_amounts.median()) if len(tx_amounts) > 0 else 0.0
-    global_mad = float(np.median(np.abs(tx_amounts - global_median)) * 1.4826) if len(tx_amounts) > 0 else 0.0
-
-    # ── 3. 逐用户计算 ─────────────────────────────────────
-    result: dict[str, dict[str, float]] = {}
-    for user in all_users:
-        # device_reuse: 该用户所有设备中，被最多账户共享的那个
-        fps = user_to_fps.get(user, set())
-        max_shared = max(
-            (len(fp_to_accounts.get(fp, set())) for fp in fps),
-            default=0,
-        )
-        device_reuse = max_shared / total_users if total_users > 0 else 0.0
-
-        # ip_change
-        if total_ips > 0:
-            ip_change = user_ip_counts.get(user, 0) / total_ips
-        else:
-            ip_change = 0.0
-
-        # tx_freq
-        tx_f = float(user_tx_counts.get(user, 0))
-
-        # login_fail
-        fails = login_fail_counts.get(user, 0)
-        total = total_login_counts.get(user, 0)
-        login_f = (fails / total) if total > 0 else 0.0
-
-        # amount_anomaly
-        amt_a = amount_anomaly_per_user.get(user, 0.0)
-
-        # behavior_time
-        bta = _calc_behavior_time_anomaly_per_user(df, user)
-
-        # multi_region
-        mrr = _calc_multi_region_risk_per_user(df, user)
-
-        # velocity features (v1.2.0)
-        vel = _calc_velocity_features_per_user(df, user)
-
-        # interval + amount baseline (v1.2.0)
-        interv = _calc_interval_features_per_user(df, user)
-        amt_base = _calc_amount_baseline_per_user(df, user, global_median, global_mad)
-
-        # cyclic time (v1.2.0)
-        cyclic = _calc_cyclic_time_features_per_user(df, user)
-
-        result[user] = {
-            "device_reuse_ratio":     device_reuse,
-            "ip_change_freq":         ip_change,
-            "tx_freq":                tx_f,
-            "login_fail_ratio":       login_f,
-            "amount_anomaly_score":   amt_a,
-            "behavior_time_anomaly":  bta,
-            "multi_region_risk":      mrr,
-            "tx_velocity_5min":       vel["tx_velocity_5min"],
-            "tx_velocity_1h":         vel["tx_velocity_1h"],
-            "device_switch_24h":      vel["device_switch_24h"],
-            "ip_switch_24h":          vel["ip_switch_24h"],
-            "tx_interval_mean_sec":   interv["tx_interval_mean_sec"],
-            "tx_burst_ratio":         interv["tx_burst_ratio"],
-            "amount_user_deviation":  amt_base["amount_user_deviation"],
-            "amount_user_max_ratio":  amt_base["amount_user_max_ratio"],
-            "night_tx_ratio":         cyclic["night_tx_ratio"],
-            "odd_hour_tx_ratio":      cyclic["odd_hour_tx_ratio"],
-        }
-
-    return result
-
-
-# ═══════════════════════════════════════════════════════════════
 # 各特征计算函数
 # ═══════════════════════════════════════════════════════════════
 

@@ -39,6 +39,8 @@ _ML_FEATURE_ORDER = [
     "tx_interval_mean_sec", "tx_burst_ratio",
     "amount_user_deviation", "amount_user_max_ratio",
     "night_tx_ratio", "odd_hour_tx_ratio",
+    "device_ip_risk", "night_automation", "velocity_amount",
+    "burst_max_ratio", "velocity_ratio", "amount_exposure",
 ]
 
 
@@ -68,10 +70,17 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "ip_switch_24h":           0.05,
     "tx_interval_mean_sec":    0.04,
     "tx_burst_ratio":          0.04,
-    "amount_user_deviation":   0.03,
-    "amount_user_max_ratio":   0.03,
-    "night_tx_ratio":          0.03,
+    "amount_user_deviation":   0.02,
+    "amount_user_max_ratio":   0.02,
+    "night_tx_ratio":          0.02,
     "odd_hour_tx_ratio":       0.02,
+    # v1.3.0 — 交互特征
+    "device_ip_risk":          0.02,
+    "night_automation":        0.02,
+    "velocity_amount":         0.03,
+    "burst_max_ratio":         0.02,
+    "velocity_ratio":          0.02,
+    "amount_exposure":         0.02,
 }
 
 
@@ -131,6 +140,12 @@ def score_risk(
         + weights.get("amount_user_max_ratio", 0.0)* amr
         + weights.get("night_tx_ratio", 0.0)       * nt
         + weights.get("odd_hour_tx_ratio", 0.0)    * ot
+        + weights.get("device_ip_risk", 0.0)        * features.get("device_ip_risk", 0.0)
+        + weights.get("night_automation", 0.0)       * features.get("night_automation", 0.0)
+        + weights.get("velocity_amount", 0.0)        * features.get("velocity_amount", 0.0)
+        + weights.get("burst_max_ratio", 0.0)        * features.get("burst_max_ratio", 0.0)
+        + weights.get("velocity_ratio", 0.0)         * features.get("velocity_ratio", 0.0)
+        + weights.get("amount_exposure", 0.0)        * features.get("amount_exposure", 0.0)
     )
 
     # 转为百分制
@@ -209,14 +224,14 @@ def score_risk(
     # ── 钳制到 0~100 ──────────────────────────────────────
     score = max(0.0, min(100.0, score))
 
-    # ── 风险等级映射 (v1.2.0 校准) ──────────────────────────
-    # 基于验证集 PR 曲线优化，HIGH 门槛从 71→55
-    if score <= 30.0:
+    # ── 风险等级映射 (v1.3.0 成本感知校准) ──────────────────
+    # LOW≤35: 消除正常用户误报, HIGH>55 不变
+    if score <= 35.0:
         level = "LOW"
-        level_range = "0~30"
+        level_range = "0~35"
     elif score <= 55.0:
         level = "MEDIUM"
-        level_range = "31~55"
+        level_range = "36~55"
     else:
         level = "HIGH"
         level_range = "56~100"
@@ -265,10 +280,10 @@ def score_risk_hybrid(
     score = max(0.0, min(100.0, score))
 
     # 4. 等级映射
-    if score <= 30.0:
-        level, level_range = "LOW", "0~30"
+    if score <= 35.0:
+        level, level_range = "LOW", "0~35"
     elif score <= 55.0:
-        level, level_range = "MEDIUM", "31~55"
+        level, level_range = "MEDIUM", "36~55"
     else:
         level, level_range = "HIGH", "56~100"
 

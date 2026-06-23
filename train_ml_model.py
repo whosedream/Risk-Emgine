@@ -25,6 +25,8 @@ FEATURE_NAMES = [
     "tx_interval_mean_sec", "tx_burst_ratio",
     "amount_user_deviation", "amount_user_max_ratio",
     "night_tx_ratio", "odd_hour_tx_ratio",
+    "device_ip_risk", "night_automation", "velocity_amount",
+    "burst_max_ratio", "velocity_ratio", "amount_exposure",
 ]
 
 # ── 1. 提取所有集合的 per-user 特征 ─────────────────
