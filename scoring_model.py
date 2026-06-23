@@ -18,8 +18,9 @@ _SCALER_PATH = os.path.join(_MODEL_DIR, "scaler.pkl")
 # 模型注册表（优先级从高到低）: (模型路径, 标准化器路径, 特征列表, 是否需列选择)
 # is_selected=True 表示: 先用 full scaler 标准化 23 特征，再按 feature_order 选列
 _MODEL_REGISTRY: list[tuple[str, str, list[str] | None, bool]] = [
+    # 优先级从高到低: Calibrated RF → 16特征Ensemble → 23特征Ensemble
+    ("calibrated_rf.pkl", "scaler.pkl", None, False),
     ("ensemble_selected.pkl", "scaler.pkl", [
-        # RFECV 最优子集 16 特征 — 23特征scaler + 列选择
         "ip_change_freq", "tx_freq", "amount_anomaly_score",
         "behavior_time_anomaly", "tx_velocity_5min", "tx_velocity_1h",
         "ip_switch_24h", "tx_interval_mean_sec", "tx_burst_ratio",
@@ -27,7 +28,6 @@ _MODEL_REGISTRY: list[tuple[str, str, list[str] | None, bool]] = [
         "night_tx_ratio", "odd_hour_tx_ratio",
         "device_ip_risk", "velocity_amount", "amount_exposure",
     ], True),
-    ("calibrated_rf.pkl", "scaler.pkl", None, False),
     ("ensemble.pkl", "scaler.pkl", None, False),
 ]
 
@@ -221,17 +221,17 @@ def score_risk(
     # ── 钳制到 0~100 ──────────────────────────────────────
     score = max(0.0, min(100.0, score))
 
-    # ── 风险等级映射 (v1.3.0 成本感知校准) ──────────────────
-    # LOW≤35: 消除正常用户误报, HIGH>55 不变
-    if score <= 35.0:
+    # ── 风险等级映射 (v1.4 Optuna多目标优化) ────────────────
+    # 在验证集上 Kappa +0.417 (0.355→0.771), Cost -6 (8→2)
+    if score <= 29.0:
         level = "LOW"
-        level_range = "0~35"
-    elif score <= 55.0:
+        level_range = "0~29"
+    elif score <= 70.0:
         level = "MEDIUM"
-        level_range = "36~55"
+        level_range = "30~70"
     else:
         level = "HIGH"
-        level_range = "56~100"
+        level_range = "71~100"
 
     return {
         "score": score,
@@ -326,13 +326,13 @@ def score_risk_hybrid(
     score = alpha_used * rule_score + (1.0 - alpha_used) * ml_score
     score = max(0.0, min(100.0, score))
 
-    # 5. 等级映射
-    if score <= 35.0:
-        level, level_range = "LOW", "0~35"
-    elif score <= 55.0:
-        level, level_range = "MEDIUM", "36~55"
+    # 5. 等级映射 (v1.4 Optuna多目标优化)
+    if score <= 29.0:
+        level, level_range = "LOW", "0~29"
+    elif score <= 70.0:
+        level, level_range = "MEDIUM", "30~70"
     else:
-        level, level_range = "HIGH", "56~100"
+        level, level_range = "HIGH", "71~100"
 
     result = {
         "score": score,

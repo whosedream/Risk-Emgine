@@ -172,29 +172,23 @@ def test_tx_freq_normalization():
 # ── 等级映射 ──────────────────────────────────────────
 
 @pytest.mark.parametrize("score_value,expected_level,expected_range", [
-    (0.0, "LOW", "0~35"),
-    (15.0, "LOW", "0~35"),
-    (30.0, "LOW", "0~35"),
-    (31.0, "HIGH", "56~100"),  # 规则增强推高
-    (50.0, "HIGH", "56~100"),
-    (55.0, "HIGH", "56~100"),
-    (70.0, "HIGH", "56~100"),
-    (85.0, "HIGH", "56~100"),
-    (100.0, "HIGH", "56~100"),
+    (0.0, "LOW", "0~29"),
+    (15.0, "LOW", "0~29"),
+    (29.0, "LOW", "0~29"),
+    (30.0, "MEDIUM", "30~70"),
+    (50.0, "MEDIUM", "30~70"),
+    (70.0, "MEDIUM", "30~70"),
+    (71.0, "HIGH", "71~100"),
+    (85.0, "HIGH", "71~100"),
+    (100.0, "HIGH", "71~100"),
 ])
 def test_level_mapping(score_value, expected_level, expected_range):
-    # 用全特征等比缩放构造恰好得指定分数（注意规则可能加分）
-    # 使用 amount_anomaly_score=0 避免意外触发规则
-    total_weight = sum(W.values())
-    ratio = score_value / 100.0 if total_weight > 0 else 0.0
-    features = _feat(
-        device_reuse_ratio=ratio, ip_change_freq=ratio,
-        tx_freq=ratio * 100.0, login_fail_ratio=ratio,
-        amount_anomaly_score=0.0,  # 避免触发规则3/6/8
-        behavior_time_anomaly=ratio, multi_region_risk=0.0,
-    )
-    result = score_risk(features)
-    assert result["level"] == expected_level
+    # 构造精确分数：用自定义权重(amount=1.0)直接控制分数，规避规则触发
+    features = _feat(amount_anomaly_score=score_value / 100.0)
+    custom_w = {"amount_anomaly_score": 1.0}
+    result = score_risk(features, weights=custom_w)
+    assert result["level"] == expected_level, \
+        f"score={result['score']:.1f} expected_level={expected_level}"
     assert result["level_range"] == expected_range
 
 

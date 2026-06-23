@@ -28,7 +28,7 @@ def test_extract_features_quickstart():
     assert set(result.keys()) == {"score", "level", "level_range"}
     assert 0.0 <= result["score"] <= 100.0
     assert result["level"] in ("LOW", "MEDIUM", "HIGH")
-    assert result["level_range"] in ("0~35", "36~55", "56~100")
+    assert result["level_range"] in ("0~29", "30~70", "71~100")
 
 
 def test_extract_features_value_ranges():
@@ -89,15 +89,15 @@ def test_score_risk_level_mapping():
         score = result["score"]
         level = result["level"]
 
-        if score <= 35:
+        if score <= 29:
             assert level == "LOW", f"{uid}: score={score}, level={level}"
-            assert result["level_range"] == "0~35"
-        elif score <= 55:
+            assert result["level_range"] == "0~29"
+        elif score <= 70:
             assert level == "MEDIUM", f"{uid}: score={score}, level={level}"
-            assert result["level_range"] == "36~55"
+            assert result["level_range"] == "30~70"
         else:
             assert level == "HIGH", f"{uid}: score={score}, level={level}"
-            assert result["level_range"] == "56~100"
+            assert result["level_range"] == "71~100"
 
 
 def test_batch_scoring():
