@@ -184,7 +184,7 @@ iso_scores = -iso.fit_predict(X_train_scaled)  # -1=异常→+1
 # 将异常分数归一化到 0-100
 iso_norm = (iso.decision_function(X_test_scaled) * -1)  # 越低越异常
 iso_norm = (iso_norm - iso_norm.min()) / (iso_norm.max() - iso_norm.min() + 1e-8) * 100
-iso_preds = np.where(iso_norm > 55, 2, np.where(iso_norm > 30, 1, 0))
+iso_preds = np.where(iso_norm > 70, 2, np.where(iso_norm > 29, 1, 0))
 r_iso, p_iso = spearmanr(y_test, iso_norm)
 print(f"Spearman r: {r_iso:.3f} (p={p_iso:.4f})")
 print(classification_report(y_test, iso_preds, target_names=["LOW", "MEDIUM", "HIGH"], zero_division=0))

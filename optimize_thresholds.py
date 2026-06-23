@@ -1,4 +1,4 @@
-"""成本感知阈值优化 — 用代价矩阵替代固定 30/55"""
+"""成本感知阈值优化 — 用代价矩阵搜索最优LOW/HIGH边界 (已优化为29/70)"""
 import numpy as np, pandas as pd
 from sklearn.metrics import cohen_kappa_score
 from feature_extraction import _extract_features_per_user_from_df, _load_and_validate
