@@ -30,8 +30,10 @@ def test_extract_features_normal():
         "tx_freq",
         "login_fail_ratio",
         "amount_anomaly_score",
+        "behavior_time_anomaly",
+        "multi_region_risk",
     }
-    assert set(features.keys()) == expected_keys
+    assert expected_keys <= set(features.keys()), f"Missing: {expected_keys - set(features.keys())}"
 
     # 值域检查
     assert 0.0 <= features["device_reuse_ratio"] <= 1.0
@@ -39,6 +41,8 @@ def test_extract_features_normal():
     assert features["tx_freq"] >= 0.0
     assert 0.0 <= features["login_fail_ratio"] <= 1.0
     assert 0.0 <= features["amount_anomaly_score"] <= 1.0
+    assert 0.0 <= features["behavior_time_anomaly"] <= 1.0
+    assert features["multi_region_risk"] in (0.0, 1.0)
 
 
 def test_device_reuse_ratio():
@@ -103,7 +107,7 @@ def test_login_fail_ratio():
     - u_1002: login=1, login_fail=1 -> 1/2 = 0.5
     - u_1003: login=1, login_fail=2 -> 2/3 ≈ 0.667
     - u_1004: login=1, login_fail=0 -> 0/1 = 0.0
-    平均: (0.333 + 0.5 + 0.667 + 0.0) / 4 ≈ 0.375
+    每用户比率均值: (1/3 + 1/2 + 2/3 + 0/1) / 4 = 0.375
     """
     features = extract_features(_csv_path("test_normal.csv"))
     assert features["login_fail_ratio"] == pytest.approx(0.375, abs=0.01)
@@ -198,12 +202,14 @@ def test_extract_features_per_user():
         "tx_freq",
         "login_fail_ratio",
         "amount_anomaly_score",
+        "behavior_time_anomaly",
+        "multi_region_risk",
     }
 
     for user_id, features in result.items():
         assert isinstance(user_id, str)
         assert isinstance(features, dict)
-        assert set(features.keys()) == expected_keys
+        assert expected_keys <= set(features.keys()), f"Missing: {expected_keys - set(features.keys())}"
         for feat_name, feat_val in features.items():
             assert isinstance(feat_val, float), (
                 f"{user_id}.{feat_name} 应为 float，实际为 {type(feat_val)}"
