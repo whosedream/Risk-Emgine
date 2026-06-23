@@ -191,14 +191,17 @@ print(classification_report(y_test, iso_preds, target_names=["LOW", "MEDIUM", "H
 
 # ── 7. 特征重要性 ──────────────────────────────────
 print("\n=== 特征重要性 ===")
-rf = models["RandomForest"]
-xgb_model = models["XGBoost"]
-for name, rf_imp, xgb_imp in sorted(
-    zip(FEATURE_NAMES, rf.feature_importances_, xgb_model.feature_importances_),
-    key=lambda x: -x[1]
-):
-    bar = "█" * int(rf_imp * 50)
-    print(f"  {name:<25} RF={rf_imp:.3f} XGB={xgb_imp:.3f} {bar}")
+rf = models.get("RandomForest")
+xgb_model = models.get("XGBoost")
+if rf is not None and xgb_model is not None and hasattr(rf, "feature_importances_") and hasattr(xgb_model, "feature_importances_"):
+    for name, rf_imp, xgb_imp in sorted(
+        zip(FEATURE_NAMES, rf.feature_importances_, xgb_model.feature_importances_),
+        key=lambda x: -x[1]
+    ):
+        bar = "█" * int(rf_imp * 50)
+        print(f"  {name:<25} RF={rf_imp:.3f} XGB={xgb_imp:.3f} {bar}")
+else:
+    print("  (跳过 — RF/XGBoost 未训练)")
 
 # ── 8. 保存模型 ────────────────────────────────────
 import joblib
@@ -221,9 +224,16 @@ from sklearn.model_selection import StratifiedKFold, cross_validate
 
 counts = np.bincount(y_train)
 min_class = counts.min()
-k_smote = min(3, min_class - 1) if min_class > 1 else 1
-print(f"  训练集类别分布: LOW={counts[0]} MEDIUM={counts[1]} HIGH={counts[2]}")
-print(f"  SMOTE k_neighbors={k_smote} (受限于最小类 {min_class} 样本)")
+if min_class >= 3:
+    k_smote = min(3, min_class - 1)
+    sampler = SMOTE(k_neighbors=k_smote, random_state=42)
+    print(f"  训练集类别分布: LOW={counts[0]} MEDIUM={counts[1]} HIGH={counts[2]}")
+    print(f"  SMOTE k_neighbors={k_smote} (受限于最小类 {min_class} 样本)")
+else:
+    from imblearn.over_sampling import RandomOverSampler
+    sampler = RandomOverSampler(random_state=42)
+    print(f"  训练集类别分布: LOW={counts[0]} MEDIUM={counts[1]} HIGH={counts[2]}")
+    print(f"  ⚠ 最小类={min_class}<3，SMOTE不可用，退化为RandomOverSampler")
 
 smote_models = {}
 for name in ["RandomForest", "GradientBoosting", "XGBoost"]:
@@ -233,7 +243,7 @@ for name in ["RandomForest", "GradientBoosting", "XGBoost"]:
     base_params.pop("eval_metric", None)
     base = base_cls(**base_params)
 
-    pipe = imb_pipeline(SMOTE(k_neighbors=k_smote, random_state=42), base)
+    pipe = imb_pipeline(sampler, base)
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     cv_results = cross_validate(pipe, X_train_scaled, y_train, cv=cv,

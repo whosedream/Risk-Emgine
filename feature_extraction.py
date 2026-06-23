@@ -6,7 +6,7 @@
   - 兼容新格式: account_id, type, machine, ip_address, pub_time, money_size,
                behavior_type, behavior_period_time, region, behavior_log
 
-输出: 7 个特征指标的 dict[str, float]
+输出: 23 个特征指标的 dict[str, float]
 
 @data: 由调用方通过 csv_path 参数传入
 """
@@ -136,7 +136,7 @@ def _load_and_validate(csv_path: str) -> tuple[pd.DataFrame, bool]:
 def extract_features(csv_path: str) -> dict[str, float]:
     """从行为日志 CSV 提取欺诈特征向量（聚合模式，所有用户取平均）。
 
-    Returns 17 个特征（v1.2.0）。
+    Returns 23 个特征（v1.4.0），向后兼容旧 7 特征输入。
     """
     per_user = extract_features_per_user(csv_path)
     keys = list(next(iter(per_user.values())).keys()) if per_user else []
