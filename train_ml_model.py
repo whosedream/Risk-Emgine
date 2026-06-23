@@ -176,10 +176,8 @@ for name, rf_imp, xgb_imp in sorted(
 
 # ── 8. 保存模型 ────────────────────────────────────
 import joblib
-os.makedirs("data/model", exist_ok=True)
-joblib.dump(scaler, "data/model/scaler.pkl")
-joblib.dump(rf, "data/model/random_forest.pkl")
-joblib.dump(xgb_model, "data/model/xgboost.pkl")
-joblib.dump(ensemble, "data/model/ensemble.pkl")
-print("\n模型已保存: data/model/{scaler,random_forest,xgboost,ensemble}.pkl")
+os.makedirs("models", exist_ok=True)
+joblib.dump(scaler, "models/scaler.pkl")
+joblib.dump(ensemble, "models/ensemble.pkl")
+print("\n模型已保存: models/{scaler,ensemble}.pkl")
 print(f"\n最佳单模型: {'XGBoost' if max(models['XGBoost'].feature_importances_) > 0 else 'RandomForest'}")

@@ -12,10 +12,8 @@ import os
 import numpy as np
 
 # ── ML 模型路径 ────────────────────────────────────────
-_MODEL_DIR = os.path.join(os.path.dirname(__file__), "data", "model")
+_MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
 _SCALER_PATH = os.path.join(_MODEL_DIR, "scaler.pkl")
-_RF_PATH = os.path.join(_MODEL_DIR, "random_forest.pkl")
-_XGB_PATH = os.path.join(_MODEL_DIR, "xgboost.pkl")
 _ENS_PATH = os.path.join(_MODEL_DIR, "ensemble.pkl")
 
 # 懒加载缓存
@@ -24,12 +22,11 @@ _ml_model = None
 
 
 def _get_best_model_path() -> str:
-    """返回可用的最佳模型路径（Ensemble > XGBoost > RandomForest）。"""
-    for path in [_ENS_PATH, _XGB_PATH, _RF_PATH]:
-        if os.path.exists(path):
-            return path
+    """返回可用的模型路径。"""
+    if os.path.exists(_ENS_PATH):
+        return _ENS_PATH
     raise FileNotFoundError(
-        f"ML 模型未找到。请先运行 train_ml_model.py 训练并保存模型。"
+        f"ML 模型未找到: {_ENS_PATH}。请运行 train_ml_model.py 训练。"
     )
 
 # 特征顺序（必须与训练时一致）

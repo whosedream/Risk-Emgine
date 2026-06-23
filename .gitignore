@@ -31,3 +31,6 @@ data/
 *.docx
 
 CLAUDE.md
+
+# Generated model files (not the committed defaults in models/)
+data/model/*.pkl
