@@ -8,13 +8,13 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from api.llm import call_llm_with_retry
-from prompts.role_loader import generate_accounts
+from prompts.role_loader import generate_accounts, save_accounts, load_accounts
 from prompts.behavior import BEHAVIOR_SYSTEM_PROMPT, get_behavior_prompt
 from config.settings import (
     DEFAULT_NUM_ACCOUNTS,
@@ -77,20 +77,61 @@ async def enhance_account_with_llm(account: dict) -> dict:
     return account
 
 
-async def generate_behavior_data(role_story: Dict, start_date: str, end_date: str, mode: str) -> List[Dict]:
-    """为单个用户生成行为数据"""
-    prompt = get_behavior_prompt(role_story, start_date, end_date, mode)
-    response = await call_llm_with_retry(prompt, BEHAVIOR_SYSTEM_PROMPT, parse_json=True, max_retries=3)
+async def generate_behavior_data(role_story: Dict, start_date: str, end_date: str, mode: str,
+                                 min_records: int = 20, max_records: int = 50,
+                                 batch_size: int = 30) -> List[Dict]:
+    """为单个用户生成行为数据（分批生成避免截断）"""
+    import random
 
-    if isinstance(response, list):
-        return response
-    elif isinstance(response, dict) and "behaviors" in response:
-        return response["behaviors"]
-    else:
-        raise ValueError(f"Unexpected response format: {response}")
+    # 计算目标记录数
+    target_records = random.randint(min_records, max_records)
+    all_records = []
+    batch_num = 0
+
+    while len(all_records) < target_records:
+        batch_num += 1
+        remaining = target_records - len(all_records)
+        current_batch_size = min(batch_size, remaining)
+
+        # 为后续批次添加上下文
+        context = ""
+        if all_records:
+            last_record = all_records[-1]
+            context = f"\n\n已有记录的最后一条：\n{json.dumps(last_record, ensure_ascii=False)}\n请继续生成后续行为，保持时间连贯性。"
+
+        prompt = get_behavior_prompt(role_story, start_date, end_date, mode,
+                                     current_batch_size, current_batch_size)
+        prompt += context
+
+        try:
+            response = await call_llm_with_retry(prompt, BEHAVIOR_SYSTEM_PROMPT, parse_json=True, max_retries=3)
+
+            if isinstance(response, list):
+                batch_records = response
+            elif isinstance(response, dict) and "behaviors" in response:
+                batch_records = response["behaviors"]
+            else:
+                batch_records = []
+
+            all_records.extend(batch_records)
+            logger.info(f"批次 {batch_num}: 生成 {len(batch_records)} 条，累计 {len(all_records)}/{target_records}")
+
+        except Exception as e:
+            logger.warning(f"批次 {batch_num} 生成失败: {e}")
+            if batch_num > 3:  # 连续失败超过 3 次则停止
+                break
+
+    return all_records[:target_records]  # 截取目标数量
 
 
-async def generate_data(start_date: str, end_date: str, output_dir: str, mode: str, num_accounts: int = DEFAULT_NUM_ACCOUNTS) -> str:
+async def generate_data(start_date: str, end_date: str, output_dir: str, mode: str,
+                        num_accounts: int = DEFAULT_NUM_ACCOUNTS,
+                        min_records_per_account: int = 20,
+                        max_records_per_account: int = 50,
+                        seed: Optional[int] = None,
+                        load_stories_path: Optional[str] = None,
+                        save_stories_path: Optional[str] = None,
+                        concurrency: int = 5) -> str:
     """
     生成多维行为日志数据
 
@@ -100,6 +141,12 @@ async def generate_data(start_date: str, end_date: str, output_dir: str, mode: s
         output_dir: 输出目录
         mode: 模式 (train/test)
         num_accounts: 生成账户数量
+        min_records_per_account: 每个账户最小记录数
+        max_records_per_account: 每个账户最大记录数
+        seed: 随机种子（用于复现角色故事）
+        load_stories_path: 从 JSON 文件加载角色故事
+        save_stories_path: 保存角色故事到 JSON 文件
+        concurrency: 并发数
 
     Returns:
         输出文件路径
@@ -118,32 +165,50 @@ async def generate_data(start_date: str, end_date: str, output_dir: str, mode: s
     print(f"  时间范围: {start_date} - {end_date}")
     print(f"  模式: {mode}")
     print(f"  账户数量: {num_accounts}")
+    print(f"  每账户记录数: {min_records_per_account} - {max_records_per_account}")
+    print(f"  预计总记录数: {num_accounts * (min_records_per_account + max_records_per_account) // 2}")
+    print(f"  并发数: {concurrency}")
     print(f"  输出文件: {output_file}")
 
-    # 1. 使用模板生成账户（同步，无 LLM 调用）
-    print("\n[1/4] 生成角色故事（模板）...")
-    role_stories = generate_accounts(num_accounts, REGIONS, start_date)
-    print(f"  已生成 {len(role_stories)} 个角色故事")
+    # 1. 获取角色故事
+    print("\n[1/4] 获取角色故事...")
+    if load_stories_path:
+        # 从文件加载
+        role_stories = load_accounts(load_stories_path)
+        print(f"  从文件加载了 {len(role_stories)} 个角色故事")
+    else:
+        # 使用模板生成
+        role_stories = generate_accounts(num_accounts, REGIONS, start_date, seed)
+        print(f"  已生成 {len(role_stories)} 个角色故事")
 
-    # 2. LLM 增强每个账户（顺序执行，避免 429 速率限制）
+        # 保存角色故事
+        if save_stories_path:
+            save_accounts(role_stories, save_stories_path)
+            print(f"  已保存角色故事到: {save_stories_path}")
+
+    # 2. 并发 LLM 增强
     print("\n[2/4] 增强账户细节（LLM）...")
-    for i, account in enumerate(role_stories):
-        role_stories[i] = await enhance_account_with_llm(account)
-        if (i + 1) % 10 == 0:
-            print(f"  已增强 {i+1}/{len(role_stories)} 个账户")
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def enhance_with_semaphore(account):
+        async with semaphore:
+            return await enhance_account_with_llm(account)
+
+    tasks = [enhance_with_semaphore(account) for account in role_stories]
+    role_stories = await asyncio.gather(*tasks)
     print(f"  已增强 {len(role_stories)} 个账户")
 
-    # 3. 生成行为数据
+    # 3. 并发生成行为数据
     print("\n[3/4] 生成行为数据...")
     all_records = []
 
-    for i, story in enumerate(role_stories):
-        print(f"  处理账户 {i+1}/{len(role_stories)}: {story.get('account_name', 'Unknown')}")
-
-        try:
-            behaviors = await generate_behavior_data(story, start_date, end_date, mode)
-
-            # 为每条行为记录添加账户信息
+    async def generate_for_account(story):
+        async with semaphore:
+            behaviors = await generate_behavior_data(
+                story, start_date, end_date, mode,
+                min_records_per_account, max_records_per_account
+            )
+            records = []
             for behavior in behaviors:
                 record = {
                     "account_id": story["account_id"],
@@ -153,15 +218,19 @@ async def generate_data(start_date: str, end_date: str, output_dir: str, mode: s
                     "machine": story.get("device_info", ""),
                     **behavior
                 }
-
-                # 训练模式添加标签
                 if mode == "train":
                     record["label"] = story.get("risk_level", 0)
+                records.append(record)
+            return records
 
-                all_records.append(record)
-        except Exception as e:
-            print(f"    警告: 生成失败 - {e}")
-            continue
+    tasks = [generate_for_account(story) for story in role_stories]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            print(f"  警告: 账户 {i+1} 生成失败 - {result}")
+        else:
+            all_records.extend(result)
 
     print(f"  已生成 {len(all_records)} 条行为记录")
 

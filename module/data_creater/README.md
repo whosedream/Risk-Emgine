@@ -58,6 +58,12 @@ data_creater/
 | output_dir | string | 是 | 输出目录（不存在时自动创建） | ./data |
 | mode | string | 是 | 模式: train / test | train |
 | num_accounts | int | 否 | 生成账户数量 (默认 100) | 100 |
+| --min-records | int | 否 | 每个账户最小记录数 (默认 20) | 20 |
+| --max-records | int | 否 | 每个账户最大记录数 (默认 50) | 50 |
+| --seed | int | 否 | 随机种子（用于复现角色故事） | 42 |
+| --load-stories | string | 否 | 从 JSON 文件加载角色故事 | stories.json |
+| --save-stories | string | 否 | 保存角色故事到 JSON 文件 | stories.json |
+| --concurrency | int | 否 | 并发数 (默认 5) | 10 |
 
 ## 约束条件
 
@@ -118,7 +124,7 @@ ANTHROPIC_AUTH_TOKEN=your-api-key
 MODEL=your-model-name
 ```
 
-### 运行
+### 基本用法
 
 ```bash
 # 训练模式（100 个账户）
@@ -126,6 +132,39 @@ python main.py 20260601 20260630 ./data train 100
 
 # 测试模式（50 个账户）
 python main.py 20260601 20260630 ./data test 50
+```
+
+### 控制记录数
+
+```bash
+# 每账户 40-60 条记录，预计 10000 条
+python main.py 20260601 20260630 ./data train 200 --min-records 40 --max-records 60
+
+# 每账户 80-120 条记录，预计 10000 条
+python main.py 20260601 20260630 ./data train 100 --min-records 80 --max-records 120
+```
+
+### 角色故事复用
+
+```bash
+# 使用随机种子生成角色故事（可复现）
+python main.py 20260601 20260630 ./data train 100 --seed 42
+
+# 保存角色故事到文件
+python main.py 20260601 20260630 ./data train 100 --save-stories stories.json
+
+# 从文件加载角色故事（跳过生成步骤）
+python main.py 20260601 20260630 ./data train 100 --load-stories stories.json
+```
+
+### 并发优化
+
+```bash
+# 使用 10 个并发（默认 5）
+python main.py 20260601 20260630 ./data train 100 --concurrency 10
+
+# 顺序执行（调试用）
+python main.py 20260601 20260630 ./data train 100 --concurrency 1
 ```
 
 ### 作为模块导入
@@ -138,7 +177,11 @@ output_file = await generate_data(
     end_date="20260630",
     output_dir="./data",
     mode="train",
-    num_accounts=100
+    num_accounts=100,
+    min_records_per_account=40,
+    max_records_per_account=60,
+    seed=42,
+    concurrency=10
 )
 ```
 
@@ -148,3 +191,24 @@ output_file = await generate_data(
 2. **LLM 增强**: 对每个账户调用 LLM 增强表面细节（姓名、设备、行为描述）
 3. **行为生成**: 根据角色故事生成时间序列行为日志
 4. **CSV 输出**: 将数据写入 CSV 文件
+
+## 并发优化
+
+- 使用 `asyncio.Semaphore` 控制并发数
+- LLM 增强和行为生成都支持并发
+- 默认并发数为 5，可通过 `--concurrency` 参数调整
+- 并发执行比顺序执行快 2x 以上（100+ 账户时）
+
+## 数据偏差
+
+不同风险等级的用户数据具有合理偏差：
+
+- **低风险用户**: 行为规律，设备/IP 稳定，交易金额正常
+- **中风险用户**: 有一定异常行为，但整体可控
+- **高风险用户**: 频繁换设备/IP，异常时段活跃，交易金额异常
+
+## 模板多样性
+
+- 低风险模板: 12 个（覆盖不同职业、年龄、消费习惯）
+- 中风险模板: 10 个（覆盖不同异常行为模式）
+- 高风险模板: 8 个（覆盖不同欺诈类型）

@@ -6,8 +6,9 @@
 - 本文件负责加载和随机选择（加载）
 """
 
+import json
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from .role_templates import ALL_TEMPLATES, RISK_DISTRIBUTION
 
@@ -66,7 +67,8 @@ def select_risk_level() -> int:
         return 2
 
 
-def generate_accounts(num_accounts: int, regions: List[str], start_date: str) -> List[Dict[str, Any]]:
+def generate_accounts(num_accounts: int, regions: List[str], start_date: str,
+                      seed: Optional[int] = None) -> List[Dict[str, Any]]:
     """
     批量生成账户角色故事
 
@@ -74,11 +76,16 @@ def generate_accounts(num_accounts: int, regions: List[str], start_date: str) ->
         num_accounts: 账户数量
         regions: 地区列表
         start_date: 起始日期
+        seed: 随机种子（用于复现）
 
     Returns:
         账户角色故事列表
     """
     from datetime import datetime, timedelta
+
+    # 设置随机种子
+    if seed is not None:
+        random.seed(seed)
 
     accounts = []
     start_dt = datetime.strptime(start_date, "%Y%m%d")
@@ -114,3 +121,29 @@ def generate_accounts(num_accounts: int, regions: List[str], start_date: str) ->
         accounts.append(account)
 
     return accounts
+
+
+def save_accounts(accounts: List[Dict[str, Any]], filepath: str) -> None:
+    """
+    保存账户角色故事到 JSON 文件
+
+    Args:
+        accounts: 账户列表
+        filepath: 保存路径
+    """
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(accounts, f, ensure_ascii=False, indent=2)
+
+
+def load_accounts(filepath: str) -> List[Dict[str, Any]]:
+    """
+    从 JSON 文件加载账户角色故事
+
+    Args:
+        filepath: 文件路径
+
+    Returns:
+        账户列表
+    """
+    with open(filepath, "r", encoding="utf-8") as f:
+        return json.load(f)

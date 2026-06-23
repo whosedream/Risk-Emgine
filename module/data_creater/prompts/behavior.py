@@ -15,7 +15,8 @@ BEHAVIOR_PROMPT = """根据以下角色故事和时间范围，生成该用户�
 时间范围：{start_date} 到 {end_date}
 模式：{mode}（train 模式包含 label，test 模式不包含）
 
-请生成该用户在时间范围内的所有行为记录，每条记录包含：
+请生成该用户在时间范围内的行为记录，记录数量在 {min_records} 到 {max_records} 条之间。
+每条记录包含：
 1. pub_time: 行为发生时间（ISO 8601 格式）
 2. ip_address: IP 地址（根据地区生成合理的 IP）
 3. type: 行为类型（login/register/transaction/browse/search/comment）
@@ -47,7 +48,8 @@ BEHAVIOR_PROMPT = """根据以下角色故事和时间范围，生成该用户�
 ```"""
 
 
-def get_behavior_prompt(role_story: dict, start_date: str, end_date: str, mode: str) -> str:
+def get_behavior_prompt(role_story: dict, start_date: str, end_date: str, mode: str,
+                       min_records: int = 20, max_records: int = 50) -> str:
     """获取行为数据生成提示词"""
     if mode == "train":
         mode_instruction = "训练模式：请在每条记录中添加 label 字段，值为用户的风险等级（0/1/2）。"
@@ -59,5 +61,7 @@ def get_behavior_prompt(role_story: dict, start_date: str, end_date: str, mode: 
         start_date=start_date,
         end_date=end_date,
         mode=mode,
-        mode_instruction=mode_instruction
+        mode_instruction=mode_instruction,
+        min_records=min_records,
+        max_records=max_records
     )

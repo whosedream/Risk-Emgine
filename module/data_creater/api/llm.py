@@ -1,5 +1,5 @@
 """
-LLM API 调用封装
+LLM API 调用封装 - 使用 DeepSeek API（OpenAI 兼容格式）
 """
 
 import json
@@ -8,43 +8,47 @@ import logging
 from typing import Union
 
 import httpx
-from config.settings import ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, MODEL
+from config.settings import ANTHROPIC_AUTH_TOKEN, MODEL
 
 logger = logging.getLogger(__name__)
+
+# DeepSeek API 端点
+DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 
 
 async def call_llm(prompt: str, system_prompt: str = "") -> str:
     """
-    调用 Anthropic API 获取 LLM 响应
+    调用 DeepSeek API 获取 LLM 响应
     """
     headers = {
-        "x-api-key": ANTHROPIC_AUTH_TOKEN,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
+        "Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}",
+        "Content-Type": "application/json"
     }
 
-    messages = [{"role": "user", "content": prompt}]
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
 
     body = {
         "model": MODEL,
-        "max_tokens": 4096,
-        "messages": messages
+        "messages": messages,
+        "max_tokens": 16384,
+        "thinking": {"type": "disabled"},  # 禁用思考模式，加快响应
+        "stream": False
     }
-
-    if system_prompt:
-        body["system"] = system_prompt
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"{ANTHROPIC_BASE_URL}/v1/messages",
+            DEEPSEEK_API_URL,
             headers=headers,
             json=body,
-            timeout=120.0
+            timeout=300.0
         )
         response.raise_for_status()
         data = response.json()
 
-    return data["content"][0]["text"]
+    return data["choices"][0]["message"]["content"]
 
 
 async def call_llm_json(prompt: str, system_prompt: str = "") -> dict:
