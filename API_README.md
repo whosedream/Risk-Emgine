@@ -206,7 +206,7 @@ print(f"高风险账户: {len(high_risk)}/{len(results)}")
 
 ## 准确率（v1.4.0）
 
-测试集 15 账户，验证集 16 账户，按账户 70/15/15 分层划分。
+测试集 15 账户，验证集 16 账户，按账户 69/16/15 分层划分（目标 70/15/15，stratify 导致 1 个偏移）。
 
 | 模型 | Val Acc | Test Acc | Test Spearman | Cost | 大小 |
 |------|:-------:|:--------:|:-------------:|:----:|:----:|
@@ -250,7 +250,7 @@ models/                  # 训练好的模型文件（开箱即用）
   ├── ensemble.pkl             ← 23特征 Ensemble
   ├── scaler.pkl / scaler_selected.pkl
   └── rfecv_selector.pkl       ← 特征选择器
-data/splits/             # 数据划分（70/15/15）
+data/splits/             # 数据划分（69/16/15）
 ```
 
 ---
