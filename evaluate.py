@@ -73,7 +73,7 @@ def compute_metrics(y_true: list[int], y_pred: list[int], scores: list[float]) -
         "precision_macro": float(precision_score(y_true, y_pred, average="macro", zero_division=0)),
         "recall_macro": float(recall_score(y_true, y_pred, average="macro", zero_division=0)),
         "f1_macro": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
-        "high_recall": float(sum(1 for t, p in zip(y_true, y_pred) if t == 2 and p == 2)),
+        "high_recall": float(sum(1 for t, p in zip(y_true, y_pred) if t == 2 and p == 2)) / max(1, sum(1 for t in y_true if t == 2)),
     }
 
 

@@ -21,8 +21,8 @@ FEATURE_LABELS = [
 
 # ── 1. 加载模型和数据 ──────────────────────────────
 print("加载模型...")
-scaler = joblib.load("data/model/scaler.pkl")
-model = joblib.load("data/model/random_forest.pkl")
+scaler = joblib.load("models/scaler.pkl")
+model = joblib.load("models/calibrated_rf.pkl")
 
 print("提取特征...")
 def load_set(name):

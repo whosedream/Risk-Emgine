@@ -87,7 +87,7 @@ def _load_ml_model():
     return _ml_scaler, _ml_model, _ml_feature_order, _ml_is_selected
 
 
-# ── 默认权重（可调，总和=1.0）v1.2.0: 15 特征 ─────────
+# ── 默认权重（可调，总和≈1.0）v1.4.0: 23 特征 ─────────
 DEFAULT_WEIGHTS: dict[str, float] = {
     "device_reuse_ratio":      0.10,
     "ip_change_freq":          0.08,
@@ -154,9 +154,9 @@ def score_risk(
     """加权求和 + 规则增强，计算综合风险评分。
 
     Args:
-        features: extract_features() 返回的特征 dict（17 维）
+        features: extract_features() 返回的特征 dict（23 维）
         weights: 可选自定义权重 dict，键名与 features 一致。
-                 默认使用 DEFAULT_WEIGHTS（17 维，总和=1.0）。
+                 默认使用 DEFAULT_WEIGHTS（23 维，总和≈1.0）。
 
     Returns:
         {"score": float, "level": str, "level_range": str}
@@ -278,7 +278,7 @@ def _compute_dynamic_alpha(features: dict[str, float], ml_proba: np.ndarray) -> 
 def score_risk_hybrid(
     features: dict[str, float],
     weights: dict[str, float] | None = None,
-    alpha: float = 0.2,
+    alpha: float | str = 0.2,
 ) -> dict[str, float | str]:
     """规则模型 + ML 混合评分。
 
