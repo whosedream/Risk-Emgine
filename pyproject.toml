@@ -4,11 +4,14 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "imbalanced-learn>=0.14.2",
     "joblib>=1.5.3",
     "numpy>=2.0.0",
+    "optuna>=4.9.0",
     "pandas>=2.3.3",
     "scikit-learn>=1.9.0",
     "shap>=0.52.0",
+    "tabpfn>=8.0.8",
     "xgboost>=3.3.0",
 ]
 
